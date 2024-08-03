@@ -1,7 +1,12 @@
-type Burn @entity {
+type User @entity {
   id: ID!
-  block: Int!
   address: String! @index
-  value: BigInt!
-  txHash: String!
+  totalDrip: BigInt!
+  lastDripBlock: Int!
+  dripCount: Int!
+}
+
+type Stats @entity {
+  id: ID!
+  uniqueUserCount: Int!
 }

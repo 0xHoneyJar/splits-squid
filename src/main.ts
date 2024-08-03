@@ -1,29 +1,48 @@
-import {TypeormDatabase} from '@subsquid/typeorm-store'
-import {Burn} from './model'
-import {processor} from './processor'
+import { TypeormDatabase } from "@subsquid/typeorm-store";
+import * as hivev2 from "./abi/hivev2";
+import { Stats, User } from "./model";
+import { processor } from "./processor";
 
-processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
-    const burns: Burn[] = []
-    for (let c of ctx.blocks) {
-        for (let tx of c.transactions) {
-            // decode and normalize the tx data
-            burns.push(
-                new Burn({
-                    id: tx.id,
-                    block: c.header.height,
-                    address: tx.from,
-                    value: tx.value,
-                    txHash: tx.hash,
-                })
-            )
+processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
+  const users: Map<string, User> = new Map();
+  let stats = await ctx.store.get(Stats, "unique");
+  if (!stats) {
+    stats = new Stats({
+      id: "unique",
+      uniqueUserCount: 0,
+    });
+  }
+
+  for (let c of ctx.blocks) {
+    // Handle Drip events
+    for (let log of c.logs) {
+      if (hivev2.events.Drip.is(log)) {
+        const { user, amount } = hivev2.events.Drip.decode(log);
+        let userEntity = users.get(user) || (await ctx.store.get(User, user));
+
+        if (!userEntity) {
+          userEntity = new User({
+            id: user,
+            address: user,
+            totalDrip: 0n,
+            lastDripBlock: 0,
+            dripCount: 0,
+          });
+          stats.uniqueUserCount += 1;
         }
-    }
-    // apply vectorized transformations and aggregations
-    const burned = burns.reduce((acc, b) => acc + b.value, 0n) / 1_000_000_000n
-    const startBlock = ctx.blocks.at(0)?.header.height
-    const endBlock = ctx.blocks.at(-1)?.header.height
-    ctx.log.info(`Burned ${burned} Gwei from ${startBlock} to ${endBlock}`)
 
-    // upsert batches of entities with batch-optimized ctx.store.save
-    await ctx.store.upsert(burns)
-})
+        userEntity.totalDrip += amount;
+        userEntity.lastDripBlock = c.header.height;
+        userEntity.dripCount += 1;
+
+        users.set(user, userEntity);
+      }
+    }
+  }
+
+  ctx.log.info(`Unique users: ${stats.uniqueUserCount}`);
+
+  // Upsert users and stats
+  await ctx.store.upsert([...users.values()]);
+  await ctx.store.save(stats);
+});
