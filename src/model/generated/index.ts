@@ -1,2 +1,2 @@
-export * from "./user.model"
-export * from "./stats.model"
+export * from "./split.model"
+export * from "./_recipientData"

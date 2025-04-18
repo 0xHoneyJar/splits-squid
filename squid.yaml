@@ -1,11 +1,11 @@
 manifestVersion: subsquid.io/v0.1
-name: interpol-squid
+name: splits-squid
 version: 1
-description: 'The very first evm squid from manifest  '
-build: 
+description: "The very first evm squid from manifest  "
+build:
 deploy:
   addons:
-    postgres: 
+    postgres:
     rpc:
       - eth.http
   processor:

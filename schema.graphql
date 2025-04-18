@@ -1,12 +1,16 @@
-type User @entity {
-  id: ID!
-  address: String! @index
-  totalDrip: BigInt!
-  lastDripBlock: Int!
-  dripCount: Int!
+type RecipientData {
+  address: String!
+  allocation: BigInt!
 }
 
-type Stats @entity {
-  id: ID!
-  uniqueUserCount: Int!
+type Split @entity {
+  id: ID! # Split contract address
+  owner: String! @index
+  creator: String! @index
+  distributionIncentive: Int!
+  totalAllocation: BigInt!
+  recipients: [RecipientData!]! # Array of recipient addresses and allocations
+  blockNumber: Int!
+  timestamp: DateTime!
+  transactionHash: String!
 }

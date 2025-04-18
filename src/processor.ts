@@ -6,30 +6,52 @@ import {
   Log as _Log,
   Transaction as _Transaction,
 } from "@subsquid/evm-processor";
-import { assertNotNull } from "@subsquid/util-internal";
-import * as hivev2 from "./abi/hivev2";
+// import { assertNotNull } from "@subsquid/util-internal";
+import assert from "assert";
+import * as pushSplitsFactoryAbi from "./abi/pushSplitsFactory";
+
+export const PUSH_SPLITS_FACTORY_ADDRESS =
+  "0x65B682D297C09f21B106EBb16666124431fB178D".toLowerCase();
 
 export const processor = new EvmBatchProcessor()
-  // Lookup archive by the network name in Subsquid registry
-  // See https://docs.subsquid.io/evm-indexing/supported-networks/
-  .setGateway("https://v2.archive.subsquid.io/network/ethereum-mainnet")
-  // Chain RPC endpoint is required for
-  //  - indexing unfinalized blocks https://docs.subsquid.io/basics/unfinalized-blocks/
-  //  - querying the contract state https://docs.subsquid.io/evm-indexing/query-state/
+  // Use Berachain gateway
+  .setGateway("https://v2.archive.subsquid.io/network/berachain-mainnet")
+  // Chain RPC endpoint is required
   .setRpcEndpoint({
-    // Set the URL via .env for local runs or via secrets when deploying to Subsquid Cloud
-    // https://docs.subsquid.io/deploy-squid/env-variables/
-    url: assertNotNull(process.env.RPC_BERA_HTTP, "No RPC endpoint supplied"),
-    // More RPC connection options at https://docs.subsquid.io/evm-indexing/configuration/initialization/#set-data-source
+    url: (() => {
+      const url = process.env.RPC_BERACHAIN_HTTP;
+      assert(url, "RPC_BERACHAIN_HTTP environment variable is not set");
+      return url;
+    })(),
     rateLimit: 10,
   })
-  .setFinalityConfirmation(75)
+  .setFinalityConfirmation(75) // Adjust if needed for Berachain
+  // Set correct start block
   .setBlockRange({
-    from: 114240,
+    from: 3804583,
   })
+  // Add log config for PushSplitsFactory SplitCreated event
   .addLog({
-    address: ["0xF1E4A550772faBfc35B28b51eB8d0b6FCd1c4878"],
-    topic0: [hivev2.events.Drip.topic],
+    address: [PUSH_SPLITS_FACTORY_ADDRESS],
+    topic0: [
+      pushSplitsFactoryAbi.events[
+        "SplitCreated(address indexed,(address[],uint256[],uint256,uint16),address,address,bytes32)"
+      ].topic,
+      pushSplitsFactoryAbi.events[
+        "SplitCreated(address indexed,(address[],uint256[],uint256,uint16),address,address)"
+      ].topic,
+    ],
+  })
+  // Optional: Select specific fields needed
+  .setFields({
+    log: {
+      transactionHash: true,
+      topics: true,
+      data: true,
+    },
+    block: {
+      timestamp: true,
+    },
   });
 
 export type Fields = EvmBatchProcessorFields<typeof processor>;
