@@ -1,6 +1,5 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, BigIntColumn as BigIntColumn_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
-import * as marshal from "./marshal"
-import {RecipientData} from "./_recipientData"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, StringColumn as StringColumn_, Index as Index_, IntColumn as IntColumn_, BigIntColumn as BigIntColumn_, OneToMany as OneToMany_, DateTimeColumn as DateTimeColumn_} from "@subsquid/typeorm-store"
+import {Recipient} from "./recipient.model"
 
 @Entity_()
 export class Split {
@@ -25,8 +24,8 @@ export class Split {
     @BigIntColumn_({nullable: false})
     totalAllocation!: bigint
 
-    @Column_("jsonb", {transformer: {to: obj => obj.map((val: any) => val.toJSON()), from: obj => obj == null ? undefined : marshal.fromList(obj, val => new RecipientData(undefined, marshal.nonNull(val)))}, nullable: false})
-    recipients!: (RecipientData)[]
+    @OneToMany_(() => Recipient, e => e.split)
+    recipients!: Recipient[]
 
     @IntColumn_({nullable: false})
     blockNumber!: number

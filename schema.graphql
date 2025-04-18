@@ -1,16 +1,18 @@
-type RecipientData {
-  address: String!
-  allocation: BigInt!
-}
-
 type Split @entity {
   id: ID! # Split contract address
   owner: String! @index
   creator: String! @index
   distributionIncentive: Int!
   totalAllocation: BigInt!
-  recipients: [RecipientData!]! # Array of recipient addresses and allocations
+  recipients: [Recipient!]! @derivedFrom(field: "split") # Link to Recipient entities
   blockNumber: Int!
   timestamp: DateTime!
   transactionHash: String!
+}
+
+type Recipient @entity {
+  id: ID! # Needs a unique ID, e.g., splitAddress-recipientAddress
+  split: Split! # Foreign key to the Split entity
+  address: String! @index
+  allocation: BigInt!
 }

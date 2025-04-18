@@ -1,2 +1,2 @@
 export * from "./split.model"
-export * from "./_recipientData"
+export * from "./recipient.model"

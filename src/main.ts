@@ -1,20 +1,18 @@
 import { TypeormDatabase } from "@subsquid/typeorm-store";
 import * as pushSplitsFactoryAbi from "./abi/pushSplitsFactory";
-import { Split } from "./model";
+import { Recipient, Split } from "./model";
 import { processor, PUSH_SPLITS_FACTORY_ADDRESS } from "./processor";
 
 processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
-  const newSplitsData: any[] = [];
+  const newSplits: Split[] = [];
+  const newRecipients: Recipient[] = [];
 
   for (let block of ctx.blocks) {
     for (let log of block.logs) {
-      // Ensure log comes from the correct factory address
       if (log.address !== PUSH_SPLITS_FACTORY_ADDRESS) continue;
 
       let decodedEventData: any;
-      let eventName: string;
 
-      // Try decoding with both event signatures
       if (
         pushSplitsFactoryAbi.events[
           "SplitCreated(address indexed,(address[],uint256[],uint256,uint16),address,address,bytes32)"
@@ -24,7 +22,6 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           pushSplitsFactoryAbi.events[
             "SplitCreated(address indexed,(address[],uint256[],uint256,uint16),address,address,bytes32)"
           ].decode(log);
-        eventName = "SplitCreatedWithSalt";
       } else if (
         pushSplitsFactoryAbi.events[
           "SplitCreated(address indexed,(address[],uint256[],uint256,uint16),address,address)"
@@ -34,13 +31,10 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           pushSplitsFactoryAbi.events[
             "SplitCreated(address indexed,(address[],uint256[],uint256,uint16),address,address)"
           ].decode(log);
-        eventName = "SplitCreated";
       } else {
-        // Log is from the factory but not a SplitCreated event we handle
         continue;
       }
 
-      // Extract data common to both event versions
       const { split, splitParams, owner, creator } = decodedEventData;
       const {
         recipients,
@@ -49,38 +43,43 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
         distributionIncentive,
       } = splitParams;
 
-      // Format recipient data as defined in schema.graphql
-      const recipientData = recipients.map((addr: string, index: number) => ({
-        address: addr.toLowerCase(),
-        allocation: allocations[index],
-      }));
+      const splitId = split.toLowerCase();
 
-      // Create the data object for the Split entity
-      const splitData = {
-        id: split.toLowerCase(), // Use split address as ID
+      const splitEntity = new Split({
+        id: splitId,
         owner: owner.toLowerCase(),
         creator: creator.toLowerCase(),
         distributionIncentive: distributionIncentive,
         totalAllocation: totalAllocation,
-        recipients: recipientData,
         blockNumber: block.header.height,
         timestamp: new Date(block.header.timestamp),
         transactionHash: log.transactionHash,
-      };
+      });
+      newSplits.push(splitEntity);
 
-      newSplitsData.push(splitData);
+      for (let i = 0; i < recipients.length; i++) {
+        const recipientAddress = recipients[i].toLowerCase();
+        const recipientAllocation = allocations[i];
+
+        const recipientId = `${splitId}-${recipientAddress}`;
+
+        const recipientEntity = new Recipient({
+          id: recipientId,
+          split: splitEntity,
+          address: recipientAddress,
+          allocation: recipientAllocation,
+        });
+        newRecipients.push(recipientEntity);
+      }
     }
   }
 
-  // Optional: Check if splits already exist if running from block 0
-  // const existingSplitIds = await ctx.store.findBy(Split, { id: In(newSplitsData.map(s => s.id)) }).then(s => new Set(s.map(split => split.id)))
-  // const splitsToInsert = newSplitsData.filter(s => !existingSplitIds.has(s.id)).map(s => new Split(s));
-
-  // Create Split entities
-  const splitsToInsert = newSplitsData.map((s) => new Split(s));
-
-  if (splitsToInsert.length > 0) {
-    ctx.log.info(`Saving ${splitsToInsert.length} new splits`);
-    await ctx.store.upsert(splitsToInsert);
+  if (newSplits.length > 0) {
+    ctx.log.info(`Saving ${newSplits.length} new splits`);
+    await ctx.store.upsert(newSplits);
+  }
+  if (newRecipients.length > 0) {
+    ctx.log.info(`Saving ${newRecipients.length} new recipients`);
+    await ctx.store.upsert(newRecipients);
   }
 });
